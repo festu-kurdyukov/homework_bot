@@ -21,10 +21,13 @@ handler.setFormatter(formatter)
 
 load_dotenv()
 
+CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
+
 RETRY_PERIOD = 600
-NINE_MIN = 540
-ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/433'
-HEADERS = {'Authorization': f'OAuth {os.getenv('PRACTICUM_TOKEN')}'}
+ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
+HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
 
 HOMEWORK_VERDICTS = {
@@ -34,8 +37,16 @@ HOMEWORK_VERDICTS = {
 }
 
 
+class ResponseStatusCodeNot200(Exception):
+    """Ответ сервера не равен 200."""
+
+
+class RequestException(Exception):
+    """Сбой при запросе к эндпоинту."""
+
+
 def check_tokens():
-    '''Проверяет доступность переменных окружения.'''
+    """Проверяет доступность переменных окружения."""
     env_var = ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']
     for var in env_var:
         if os.getenv(var) is None:
@@ -46,30 +57,45 @@ def check_tokens():
 
 
 def send_message(bot, message):
-    text = message
-    CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-    bot.send_message(CHAT_ID, text)
-    logger.debug(f'Бот отправил сообщение {text}.')
+    try:
+        text = message
+        bot.send_message(CHAT_ID, text)
+        logger.debug(f'Бот отправил сообщение {text}.')
+    except Exception:
+        logger.error('Сбой при отправки сообщениея.')
 
 
 def get_api_answer(timestamp):
-    '''Запрос к эндпоинту API-сервиса.'''
-    homework_statuses = requests.get(
-        ENDPOINT,
-        headers=HEADERS,
-        params={'from_date': timestamp}
-    )
-    response = homework_statuses.json().get('homeworks')
-    print(response)
-    return response
+    """Запрос к эндпоинту API-сервиса."""
+    try:
+        homework_statuses = requests.get(
+            ENDPOINT,
+            headers=HEADERS,
+            params={'from_date': timestamp}
+        )
+        response = homework_statuses
+        if response.status_code != 200:
+            mes_err = (
+                f'Сбой в работе программы: Эндпоинт {ENDPOINT} недоступен.'
+                f' Код ответа API: {response.status_code}'
+            )
+            logger.error(mes_err)
+            raise ResponseStatusCodeNot200(mes_err)
+        return response.json().get('homeworks')
+    except requests.exceptions.RequestException as req_err:
+        mes_err = (
+            'Сбой в работе программы: '
+            f'Код ответа API: {req_err}'
+        )
+        raise RequestException(mes_err)
 
 
 def check_response(response):
-    '''Проверяет ответ API.'''
+    """Проверяет ответ API."""
     if len(response) > 0 and response is not None:
         homework = (
-            response[0].get('homework_name'),
-            response[0].get('status')
+            response[0]['homework_name'],
+            response[0]['status']
         )
         str = parse_status(homework)
         return str
@@ -84,24 +110,21 @@ def parse_status(homework):
 def main():
     """Основная логика работы бота."""
     check_tokens()
-    bot = TeleBot(token=os.getenv('TELEGRAM_TOKEN'))
-    #timestamp = int(time.time()) - NINE_MIN
+    bot = TeleBot(token=TELEGRAM_TOKEN)
+    #timestamp = int(time.time())
     timestamp = 1736074959
-    response = get_api_answer(timestamp)
-    mes = check_response(response)
-    if mes is not None:
-        send_message(bot, mes)
 
-    # while True:
-    #     try:
-    #         response = get_api_answer(timestamp)
-    #         mes = check_response(response)
-    #         if mes is not None:
-    #             send_message(bot, mes)
+    while True:
+        try:
+            response = get_api_answer(timestamp)
+            if response is not None:
+                mes = check_response(response)
+                # if mes is not None:
+                #     send_message(bot, mes)
 
-    #     except Exception as error:
-    #         message = f'Сбой в работе программы: {error}'
-    #         logging.error(message)
+        except Exception as error:
+            message = f'Сбой в работе программы: {error}'
+            logger.error(message)
 
         time.sleep(RETRY_PERIOD)
 
