@@ -6,7 +6,6 @@ import time
 import requests
 from dotenv import load_dotenv
 from telebot import TeleBot
-from pprint import pprint
 
 
 logger = logging.getLogger(__name__)
@@ -58,6 +57,7 @@ def check_tokens():
 
 
 def send_message(bot, message):
+    """Отправка сообщения в ТГ."""
     try:
         text = message
         bot.send_message(CHAT_ID, text)
@@ -107,6 +107,7 @@ def check_response(response):
 
 
 def parse_status(homework):
+    """Получение статуса домашней работы."""
     homework_name, homework_verdict = homework
     verdict = HOMEWORK_VERDICTS.get(homework_verdict)
     if verdict is not None:
