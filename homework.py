@@ -45,14 +45,22 @@ class RequestException(Exception):
     """Сбой при запросе к эндпоинту."""
 
 
+class ParseStatusError(Exception):
+    """Нестандартный статус в ответе."""
+
+
 def check_tokens():
     """Проверяет доступность переменных окружения."""
-    env_var = ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']
-    for var in env_var:
-        if os.getenv(var) is None:
+    env_var = {
+        'PRACTICUM_TOKEN': PRACTICUM_TOKEN,
+        'TELEGRAM_TOKEN': TELEGRAM_TOKEN,
+        'TELEGRAM_CHAT_ID': TELEGRAM_CHAT_ID
+    }
+    for name in ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID'):
+        if env_var[name] is None:
             logger.critical(
                 "Отсутствует обязательная переменная окружения: "
-                f"'{var}' Программа принудительно остановлена.")
+                f"'{name}' Программа принудительно остановлена.")
             sys.exit(1)
 
 
@@ -113,8 +121,8 @@ def parse_status(homework):
     if verdict is not None:
         return f'Изменился статус проверки работы "{homework_name}". {verdict}'
     else:
-        logger.error(f'В ответе API обнаружен неожиданный статус {verdict}')
-        return f'Неожиданный статус домашней работы: {verdict}'
+        mes = f'В ответе API обнаружен неожиданный статус {verdict}'
+        raise ParseStatusError(mes)
 
 
 def main():
