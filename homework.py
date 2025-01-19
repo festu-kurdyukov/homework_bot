@@ -26,6 +26,7 @@ TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 
 RETRY_PERIOD = 600
+NINE_MIN = 540
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
@@ -81,6 +82,7 @@ def get_api_answer(timestamp):
             )
             logger.error(mes_err)
             raise ResponseStatusCodeNot200(mes_err)
+        print(response.json())
         return response.json().get('homeworks')
     except requests.exceptions.RequestException as req_err:
         mes_err = (
@@ -92,35 +94,45 @@ def get_api_answer(timestamp):
 
 def check_response(response):
     """Проверяет ответ API."""
-    if len(response) > 0 and response is not None:
+    if len(response) > 0:
         homework = (
             response[0]['homework_name'],
             response[0]['status']
         )
         str = parse_status(homework)
         return str
+    else:
+        logger.debug('В ответе нет новых статусов.')
+        return 'В ответе нет новых статусов.'
 
 
 def parse_status(homework):
     homework_name, homework_verdict = homework
     verdict = HOMEWORK_VERDICTS.get(homework_verdict)
-    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+    if verdict is not None:
+        return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+    else:
+        logger.error(f'В ответе API обнаружен неожиданный статус {verdict}')
+        return f'Неожиданный статус домашней работы: {verdict}'
 
 
 def main():
     """Основная логика работы бота."""
     check_tokens()
     bot = TeleBot(token=TELEGRAM_TOKEN)
-    #timestamp = int(time.time())
-    timestamp = 1736074959
+    timestamp = int(time.time()) - NINE_MIN
 
     while True:
         try:
             response = get_api_answer(timestamp)
+            mes = ''
+            print(mes)
             if response is not None:
                 mes = check_response(response)
-                # if mes is not None:
-                #     send_message(bot, mes)
+            else:
+                mes = 'В ответе отсутствуют ожидаемые ключи.'
+                logger.error(mes)
+            send_message(bot, mes)
 
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
