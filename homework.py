@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 import time
+from http import HTTPStatus
 
 import requests
 from dotenv import load_dotenv
@@ -20,12 +21,11 @@ handler.setFormatter(formatter)
 
 load_dotenv()
 
-CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 
 RETRY_PERIOD = 600
-NINE_MIN = 540
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
@@ -60,8 +60,8 @@ def send_message(bot, message):
     """Отправка сообщения в ТГ."""
     try:
         text = message
-        bot.send_message(CHAT_ID, text)
-        logger.debug(f'Бот отправил сообщение {text}.')
+        bot.send_message(TELEGRAM_CHAT_ID, text)
+        logger.debug(f'Бот отправил сообщение "{text}"')
     except Exception:
         logger.error('Сбой при отправки сообщениея.')
 
@@ -75,16 +75,14 @@ def get_api_answer(timestamp):
             params={'from_date': timestamp}
         )
         response = homework_statuses
-        if response.status_code != 200:
+        if response.status_code != HTTPStatus.OK:
             mes_err = (
-                f'Сбой в работе программы: Эндпоинт {ENDPOINT} недоступен.'
+                f'Эндпоинт {ENDPOINT} недоступен.'
                 f' Код ответа API: {response.status_code}'
             )
-            logger.error(mes_err)
             raise ResponseStatusCodeNot200(mes_err)
-        print(response.json())
-        return response.json().get('homeworks')
-    except requests.exceptions.RequestException as req_err:
+        return response.json()
+    except requests.RequestException as req_err:
         mes_err = (
             'Сбой в работе программы: '
             f'Код ответа API: {req_err}'
@@ -94,21 +92,23 @@ def get_api_answer(timestamp):
 
 def check_response(response):
     """Проверяет ответ API."""
-    if len(response) > 0:
-        homework = (
-            response[0]['homework_name'],
-            response[0]['status']
-        )
-        str = parse_status(homework)
-        return str
-    else:
-        logger.debug('В ответе нет новых статусов.')
-        return 'В ответе нет новых статусов.'
+    try:
+        homeworks = response['homeworks']
+    except KeyError:
+        mes = 'В ответе от API отсутствует ожидаемый ключ.'
+        raise KeyError(mes)
+    if not isinstance(homeworks, list):
+        mes = 'Тип данных ответа от API не соответствует ожиданиям.'
+        raise TypeError(mes)
 
 
 def parse_status(homework):
     """Получение статуса домашней работы."""
-    homework_name, homework_verdict = homework
+    homework_name = homework.get('homework_name')
+    homework_verdict = homework.get('status')
+    if homework_name is None or homework_verdict is None:
+        mes = 'В ответе от API отсутствует ожидаемый ключ.'
+        raise KeyError(mes)
     verdict = HOMEWORK_VERDICTS.get(homework_verdict)
     if verdict is not None:
         return f'Изменился статус проверки работы "{homework_name}". {verdict}'
@@ -121,25 +121,27 @@ def main():
     """Основная логика работы бота."""
     check_tokens()
     bot = TeleBot(token=TELEGRAM_TOKEN)
-    timestamp = int(time.time()) - NINE_MIN
+    timestamp = int(time.time())
 
     while True:
+        err_message = ''
         try:
             response = get_api_answer(timestamp)
-            mes = ''
-            print(mes)
-            if response is not None:
-                mes = check_response(response)
+            check_response(response)
+            homeworks = response.get('homeworks')
+            if homeworks:
+                for homework in homeworks:
+                    mes = parse_status(homework)
+                    send_message(bot, mes)
             else:
-                mes = 'В ответе отсутствуют ожидаемые ключи.'
-                logger.error(mes)
-            send_message(bot, mes)
-
+                logger.debug('В ответе не новых статусов.')
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            logger.error(message)
-
-        time.sleep(RETRY_PERIOD)
+        finally:
+            if err_message:
+                logger.error(err_message)
+                send_message(bot, message)
+            time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
