@@ -8,9 +8,9 @@ import requests
 from dotenv import load_dotenv
 from telebot import apihelper, TeleBot
 
-from exeptions import (ResponseStatusCodeNot200,
-                       APIRequestException,
-                       ParseStatusError)
+from exeptions import (APIRequestException,
+                       ParseStatusError,
+                       ResponseStatusCodeNot200)
 
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ def check_tokens():
     for key, value in env_var.items():
         if value is None:
             no_key.add(key)
-    if len(no_key) > 0:
+    if no_key:
         logger.critical(
             "Отсутствует обязательная переменная окружения: "
             f"'{no_key}' Программа принудительно остановлена.")
@@ -75,12 +75,11 @@ def get_api_answer(timestamp):
     """Запрос к эндпоинту API-сервиса."""
     try:
         logger.debug(f'Делаю запрос к эндпонту "{ENDPOINT}"')
-        homework_statuses = requests.get(
+        response = requests.get(
             ENDPOINT,
             headers=HEADERS,
             params={'from_date': timestamp}
         )
-        response = homework_statuses
         logger.debug('Ответ получен.')
     except requests.RequestException as req_err:
         mes_err = (
@@ -102,18 +101,18 @@ def check_response(response):
     if not isinstance(response, dict):
         mes = (
             f'Ключ "response" {type(response)}.'
-            f'Тип данных ответа от API не соответствует ожиданиям.'
+            'Тип данных ответа от API не соответствует ожиданиям.'
         )
         raise TypeError(mes)
     try:
-        homeworks = response.get('homeworks')
+        homeworks = response['homeworks']
     except KeyError:
         mes = 'В ответе от API отсутствует ожидаемый ключ.'
         raise KeyError(mes)
     if not isinstance(homeworks, list):
         mes = (
             f'Ключ "homeworks" {type(homeworks)}.'
-            f'Тип данных ответа от API не соответствует ожиданиям.'
+            'Тип данных ответа от API не соответствует ожиданиям.'
         )
         raise TypeError(mes)
     return homeworks
@@ -150,7 +149,7 @@ def main():
             if homeworks:
                 mes = parse_status(homeworks[0])
                 if send_message(bot, mes):
-
+                    last_mes = mes
                     timestamp = response.get('current_date', timestamp)
             else:
                 logger.debug('Список домашек пуст.')
