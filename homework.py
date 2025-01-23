@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from telebot import apihelper, TeleBot
 
 from exeptions import (ResponseStatusCodeNot200,
-                       APIRequestException, 
+                       APIRequestException,
                        ParseStatusError)
 
 
@@ -62,7 +62,7 @@ def check_tokens():
 def send_message(bot, message):
     """Отправка сообщения в ТГ."""
     try:
-        logger.debug(f'Начинаю отправлять сообщение в ТГ')
+        logger.debug('Начинаю отправлять сообщение в ТГ')
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.debug(f'Бот отправил сообщение "{message}"')
         return True
@@ -74,7 +74,7 @@ def send_message(bot, message):
 def get_api_answer(timestamp):
     """Запрос к эндпоинту API-сервиса."""
     try:
-        logger.debug(f'Делаю запрос к эндпонту {{ENDPOINT}}')
+        logger.debug(f'Делаю запрос к эндпонту "{ENDPOINT}"')
         homework_statuses = requests.get(
             ENDPOINT,
             headers=HEADERS,
@@ -101,7 +101,7 @@ def check_response(response):
     """Проверяет ответ API."""
     if not isinstance(response, dict):
         mes = (
-            f'Ключ "response" {type(homeworks)}.'
+            f'Ключ "response" {type(response)}.'
             f'Тип данных ответа от API не соответствует ожиданиям.'
         )
         raise TypeError(mes)
